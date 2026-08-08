@@ -1,15 +1,14 @@
-from datetime import datetime, timedelta
+
 import json
 import os
+from datetime import datetime, timedelta
+import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
-# Page Configuration
 st.set_page_config(
     page_title="UHS Bhawal - Teacher Adjustment",
     page_icon="🏫",
@@ -132,8 +131,9 @@ master_schedule = {
     },
 }
 
+# DR MUKESH KU RAI removed from STRICT_FREE_MATRIX to prevent substitute assignment
 STRICT_FREE_MATRIX = {
-    1: ["DINESH KUMAR", "PINTU KUMAR", "GARIMA", "DR MUKESH KU RAI"],
+    1: ["DINESH KUMAR", "PINTU KUMAR", "GARIMA"],
     2: ["AYODHYA DUBEY", "DINESH KUMAR", "PINTU KUMAR", "GARIMA"],
     3: [
         "SAURABH KUMAR",
@@ -141,30 +141,22 @@ STRICT_FREE_MATRIX = {
         "INDAL KUMAR",
         "DINESH KUMAR",
         "GARIMA",
-        "DR MUKESH KU RAI",
     ],
-    4: ["ARCHANA KUMARI", "MD MAROOF", "SADHNA KUMARI", "DR MUKESH KU RAI"],
+    4: ["ARCHANA KUMARI", "MD MAROOF", "SADHNA KUMARI"],
     5: [
         "SAURABH KUMAR",
         "ARCHANA KUMARI",
         "KRISHNAMOHAN KAJI",
         "INDAL KUMAR",
         "PINTU KUMAR",
-        "DR MUKESH KU RAI",
     ],
     6: [
         "SAURABH KUMAR",
         "GARIMA",
-        "DR MUKESH KU RAI",
         "SARWAT SIDDIQUI",
         "VIPIN KUMAR RANJAN",
     ],
-    7: [
-        "NEERAJ KUMAR",
-        "PRASHANT KU OJHA",
-        "VIPIN KUMAR RANJAN",
-        "DR MUKESH KU RAI",
-    ],
+    7: ["NEERAJ KUMAR", "PRASHANT KU OJHA", "VIPIN KUMAR RANJAN"],
     8: [],
 }
 
@@ -205,7 +197,10 @@ def generate_adjustments(absent_teachers):
                     t for t in period_teachers if t not in absent_teachers
                 ]
 
+                # Prevent assigning DR MUKESH KU RAI even as co-teacher substitute
                 for partner in present_partners:
+                    if partner == "DR MUKESH KU RAI":
+                        continue
                     if (
                         partner not in assigned_today_in_period
                         and today_counts.get(partner, 0) < 2
