@@ -1,8 +1,6 @@
-
 import json
 import os
-from datetime import datetime, timedelta
-import reportlab
+from datetime import datetime
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -10,12 +8,10 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 import streamlit as st
 
 st.set_page_config(
-    page_title="UHS Bhawal - Teacher Adjustment",
+    page_title="UHS Bhawal - Teacher Adjustment & Free Periods",
     page_icon="🏫",
     layout="centered",
 )
-
-HISTORY_FILE = "adjustment_history.json"
 
 all_teachers = [
     "SAURABH KUMAR",
@@ -131,31 +127,14 @@ master_schedule = {
     },
 }
 
-# DR MUKESH KU RAI removed from STRICT_FREE_MATRIX to prevent substitute assignment
+# Free matrix reference (DR MUKESH KU RAI excluded from substitute pool)
 STRICT_FREE_MATRIX = {
     1: ["DINESH KUMAR", "PINTU KUMAR", "GARIMA"],
     2: ["AYODHYA DUBEY", "DINESH KUMAR", "PINTU KUMAR", "GARIMA"],
-    3: [
-        "SAURABH KUMAR",
-        "ARCHANA KUMARI",
-        "INDAL KUMAR",
-        "DINESH KUMAR",
-        "GARIMA",
-    ],
+    3: ["SAURABH KUMAR", "ARCHANA KUMARI", "INDAL KUMAR", "DINESH KUMAR", "GARIMA"],
     4: ["ARCHANA KUMARI", "MD MAROOF", "SADHNA KUMARI"],
-    5: [
-        "SAURABH KUMAR",
-        "ARCHANA KUMARI",
-        "KRISHNAMOHAN KAJI",
-        "INDAL KUMAR",
-        "PINTU KUMAR",
-    ],
-    6: [
-        "SAURABH KUMAR",
-        "GARIMA",
-        "SARWAT SIDDIQUI",
-        "VIPIN KUMAR RANJAN",
-    ],
+    5: ["SAURABH KUMAR", "ARCHANA KUMARI", "KRISHNAMOHAN KAJI", "INDAL KUMAR", "PINTU KUMAR"],
+    6: ["SAURABH KUMAR", "GARIMA", "SARWAT SIDDIQUI", "VIPIN KUMAR RANJAN"],
     7: ["NEERAJ KUMAR", "PRASHANT KU OJHA", "VIPIN KUMAR RANJAN"],
     8: [],
 }
@@ -168,6 +147,17 @@ def is_teacher_busy_in_schedule(teacher, period):
         if teacher in teacher_list:
             return True
     return False
+
+
+def get_free_teachers_by_period():
+    free_matrix = {}
+    for period in range(1, 8):
+        free_teachers = []
+        for t in all_teachers:
+            if not is_teacher_busy_in_schedule(t, period):
+                free_teachers.append(t)
+        free_matrix[period] = free_teachers
+    return free_matrix
 
 
 def generate_adjustments(absent_teachers):
@@ -184,37 +174,23 @@ def generate_adjustments(absent_teachers):
             if "PLAY ACTIVITY" in assigned_teacher_str:
                 continue
 
-            period_teachers = [
-                t.strip() for t in assigned_teacher_str.split("/")
-            ]
-            absent_in_this_class = [
-                t for t in period_teachers if t in absent_teachers
-            ]
+            period_teachers = [t.strip() for t in assigned_teacher_str.split("/")]
+            absent_in_this_class = [t for t in period_teachers if t in absent_teachers]
 
             if absent_in_this_class:
                 partner_assigned = False
-                present_partners = [
-                    t for t in period_teachers if t not in absent_teachers
-                ]
+                present_partners = [t for t in period_teachers if t not in absent_teachers]
 
-                # Prevent assigning DR MUKESH KU RAI even as co-teacher substitute
                 for partner in present_partners:
                     if partner == "DR MUKESH KU RAI":
                         continue
-                    if (
-                        partner not in assigned_today_in_period
-                        and today_counts.get(partner, 0) < 2
-                    ):
-                        adjustments.append(
-                            {
-                                "Period": f"Period {period}",
-                                "Class": cls,
-                                "Absent Teacher": ", ".join(
-                                    absent_in_this_class
-                                ),
-                                "Substitute Assigned": f"{partner} (Co-Teacher Present)",
-                            }
-                        )
+                    if partner not in assigned_today_in_period and today_counts.get(partner, 0) < 2:
+                        adjustments.append({
+                            "Period": f"Period {period}",
+                            "Class": cls,
+                            "Absent Teacher": ", ".join(absent_in_this_class),
+                            "Substitute Assigned": f"{partner} (Co-Teacher Present)"
+                        })
                         assigned_today_in_period.add(partner)
                         today_counts[partner] += 1
                         partner_assigned = True
@@ -232,104 +208,109 @@ def generate_adjustments(absent_teachers):
                             valid_candidates.append(t)
 
                     if valid_candidates:
-                        selected_teacher = min(
-                            valid_candidates, key=lambda t: today_counts[t]
-                        )
-                        adjustments.append(
-                            {
-                                "Period": f"Period {period}",
-                                "Class": cls,
-                                "Absent Teacher": ", ".join(
-                                    absent_in_this_class
-                                ),
-                                "Substitute Assigned": selected_teacher,
-                            }
-                        )
+                        selected_teacher = min(valid_candidates, key=lambda t: today_counts[t])
+                        adjustments.append({
+                            "Period": f"Period {period}",
+                            "Class": cls,
+                            "Absent Teacher": ", ".join(absent_in_this_class),
+                            "Substitute Assigned": selected_teacher
+                        })
                         assigned_today_in_period.add(selected_teacher)
                         today_counts[selected_teacher] += 1
                     else:
-                        adjustments.append(
-                            {
-                                "Period": f"Period {period}",
-                                "Class": cls,
-                                "Absent Teacher": ", ".join(
-                                    absent_in_this_class
-                                ),
-                                "Substitute Assigned": "NO TEACHER FREE",
-                            }
-                        )
+                        adjustments.append({
+                            "Period": f"Period {period}",
+                            "Class": cls,
+                            "Absent Teacher": ", ".join(absent_in_this_class),
+                            "Substitute Assigned": "NO TEACHER FREE"
+                        })
 
     return adjustments
 
 
-def generate_pdf(adjustments, absent_list):
+def generate_adjustment_pdf(adjustments, absent_list):
     current_date_str = datetime.now().strftime("%d-%m-%Y")
     pdf_path = f"Adjustment_Chart_{current_date_str}.pdf"
 
     doc = SimpleDocTemplate(
         pdf_path,
         pagesize=landscape(A4),
-        rightMargin=20,
-        leftMargin=20,
-        topMargin=20,
-        bottomMargin=20,
+        rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
     )
     elements = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle(
-        "TitleStyle", parent=styles["Heading1"], fontSize=16, alignment=1
-    )
-    subtitle_style = ParagraphStyle(
-        "SubTitleStyle", parent=styles["Normal"], fontSize=10, alignment=1
-    )
+    title_style = ParagraphStyle("TitleStyle", parent=styles["Heading1"], fontSize=16, alignment=1)
+    subtitle_style = ParagraphStyle("SubTitleStyle", parent=styles["Normal"], fontSize=10, alignment=1)
 
-    elements.append(
-        Paragraph(
-            "<b>राजकीय उत्क्रमित उच्च माध्यमिक विद्यालय, भावल (रामनगर)</b>",
-            title_style,
-        )
-    )
+    elements.append(Paragraph("<b>राजकीय उत्क्रमित उच्च माध्यमिक विद्यालय, भावल (रामनगर)</b>", title_style))
     elements.append(Spacer(1, 4))
-    elements.append(
-        Paragraph(
-            f"<b>DAILY TEACHER ADJUSTMENT CHART</b><br/><b>Date:</b> {current_date_str} | <b>Absent Teachers:</b> {', '.join(absent_list)}",
-            subtitle_style,
-        )
-    )
+    elements.append(Paragraph(f"<b>DAILY TEACHER ADJUSTMENT CHART</b><br/><b>Date:</b> {current_date_str} | <b>Absent Teachers:</b> {', '.join(absent_list)}", subtitle_style))
     elements.append(Spacer(1, 10))
 
-    table_data = [
-        [
-            "S.No.",
-            "Period",
-            "Class / Section",
-            "Absent Teacher",
-            "Assigned Substitute Teacher",
-        ]
-    ]
+    table_data = [["S.No.", "Period", "Class / Section", "Absent Teacher", "Assigned Substitute Teacher"]]
     for idx, adj in enumerate(adjustments, 1):
-        table_data.append(
-            [
-                str(idx),
-                adj["Period"],
-                adj["Class"],
-                adj["Absent Teacher"],
-                adj["Substitute Assigned"],
-            ]
-        )
+        table_data.append([
+            str(idx),
+            adj["Period"],
+            adj["Class"],
+            adj["Absent Teacher"],
+            adj["Substitute Assigned"]
+        ])
 
     t = Table(table_data, colWidths=[40, 80, 130, 240, 240])
-    t.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A365D")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E1")),
-            ]
-        )
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1A365D')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#CBD5E1')),
+    ]))
+
+    elements.append(t)
+    doc.build(elements)
+    return pdf_path
+
+
+def generate_free_periods_pdf():
+    current_date_str = datetime.now().strftime("%d-%m-%Y")
+    pdf_path = f"Free_Periods_Master_Chart_{current_date_str}.pdf"
+
+    doc = SimpleDocTemplate(
+        pdf_path,
+        pagesize=landscape(A4),
+        rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
     )
+    elements = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("TitleStyle", parent=styles["Heading1"], fontSize=16, alignment=1)
+    subtitle_style = ParagraphStyle("SubTitleStyle", parent=styles["Normal"], fontSize=10, alignment=1)
+
+    elements.append(Paragraph("<b>राजकीय उत्क्रमित उच्च माध्यमिक विद्यालय, भावल (रामनगर)</b>", title_style))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(f"<b>TEACHERS FREE PERIODS MASTER CHART</b><br/><b>Date:</b> {current_date_str}", subtitle_style))
+    elements.append(Spacer(1, 10))
+
+    free_matrix = get_free_teachers_by_period()
+    table_data = [["Period", "Total Free", "Available Free Teachers"]]
+
+    for period in range(1, 8):
+        free_list = free_matrix[period]
+        teachers_str = ", ".join(free_list) if free_list else "None"
+        table_data.append([
+            f"Period {period}",
+            str(len(free_list)),
+            teachers_str
+        ])
+
+    t = Table(table_data, colWidths=[80, 80, 570])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E293B')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#94A3B8')),
+    ]))
 
     elements.append(t)
     doc.build(elements)
@@ -337,25 +318,51 @@ def generate_pdf(adjustments, absent_list):
 
 
 # ==================== STREAMLIT USER INTERFACE ====================
-st.title("🏫 UHS Bhawal - Daily Adjustment")
-st.write("Aaj jo teachers absent hain, unhe select karein:")
+st.title("🏫 UHS Bhawal - Adjustment & Free Periods")
 
-absent_today = st.multiselect("Select Absent Teachers", all_teachers)
+tab1, tab2 = st.tabs(["📋 Daily Adjustment", "🕒 Free Period Master Chart"])
 
-if st.button("Generate Adjustment Chart", type="primary"):
-    if not absent_today:
-        st.warning("Kripya kam se kam ek absent teacher select karein.")
-    else:
-        results = generate_adjustments(absent_today)
-        st.success("Adjustment Chart Tayar Ho Gaya Hai!")
+with tab1:
+    st.write("Aaj jo teachers absent hain, unhe select karein:")
+    absent_today = st.multiselect("Select Absent Teachers", all_teachers)
 
-        st.dataframe(results, use_container_width=True)
+    if st.button("Generate Adjustment Chart", type="primary"):
+        if not absent_today:
+            st.warning("Kripya kam se kam ek absent teacher select karein.")
+        else:
+            results = generate_adjustments(absent_today)
+            st.success("Adjustment Chart Tayar Ho Gaya Hai!")
 
-        pdf_file = generate_pdf(results, absent_today)
-        with open(pdf_file, "rb") as f:
-            st.download_button(
-                label="📥 Download Adjustment PDF",
-                data=f,
-                file_name=os.path.basename(pdf_file),
-                mime="application/pdf",
-            )
+            st.dataframe(results, use_container_width=True)
+
+            pdf_file = generate_adjustment_pdf(results, absent_today)
+            with open(pdf_file, "rb") as f:
+                st.download_button(
+                    label="📥 Download Adjustment PDF",
+                    data=f,
+                    file_name=os.path.basename(pdf_file),
+                    mime="application/pdf",
+                )
+
+with tab2:
+    st.write("Is chart me har period ke anusar free teachers ki list hai:")
+    free_data = get_free_teachers_by_period()
+    
+    display_list = []
+    for p, teachers in free_data.items():
+        display_list.append({
+            "Period": f"Period {p}",
+            "Total Free Teachers": len(teachers),
+            "Teachers List": ", ".join(teachers)
+        })
+    st.dataframe(display_list, use_container_width=True)
+
+    free_pdf_file = generate_free_periods_pdf()
+    with open(free_pdf_file, "rb") as f:
+        st.download_button(
+            label="📥 Download Free Period Master PDF",
+            data=f,
+            file_name=os.path.basename(free_pdf_file),
+            mime="application/pdf",
+        )
+
