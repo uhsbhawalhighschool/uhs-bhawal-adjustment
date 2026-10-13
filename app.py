@@ -33,17 +33,22 @@ all_teachers = [
     "DR MUKESH KU RAI",
 ]
 
+# Determine alternating rotation for merged Class IX based on day of the year / date ordinal
+is_ix_a_day = datetime.now().date().toordinal() % 2 == 0
+class_ix_label = "CLASS IX (IX A Rotation)" if is_ix_a_day else "CLASS IX (IX B Rotation)"
+
+class_ix_periods = {
+    1: ("ARCHANA KUMARI" if is_ix_a_day else "KRISHNAMOHAN KAJI"),
+    2: ("DINESH KUMAR / INDAL KUMAR" if is_ix_a_day else "SNEHA SINGH"),
+    3: ("SANDHYA KUMARI" if is_ix_a_day else "NEERAJ KUMAR"),
+    4: ("SAURABH KUMAR" if is_ix_a_day else "DINESH KUMAR / PRASHANT KU OJHA"),
+    5: ("AYODHYA DUBEY / MD MAROOF" if is_ix_a_day else "SADHNA KUMARI"),
+    6: ("INDAL KUMAR" if is_ix_a_day else "AYODHYA DUBEY / MD MAROOF"),
+    7: ("SNEHA SINGH" if is_ix_a_day else "SAURABH KUMAR"),
+}
+
 master_schedule = {
-    "CLASS 8TH": {
-        1: "SANDHYA KUMARI",
-        2: "SADHNA KUMARI",
-        3: "SNEHA SINGH",
-        4: "SARWAT SIDDIQUI",
-        5: "PRASHANT KU OJHA",
-        6: "NEERAJ KUMAR",
-        7: "AYODHYA DUBEY",
-        8: "PLAY ACTIVITY",
-    },
+    class_ix_label: class_ix_periods,
     "MODEL CLASS IX": {
         1: "SAURABH KUMAR",
         2: "NEERAJ KUMAR",
@@ -52,24 +57,6 @@ master_schedule = {
         5: "VIPIN KUMAR RANJAN",
         6: "SNEHA SINGH",
         7: "GARIMA / SADHNA KUMARI",
-    },
-    "CLASS IX A": {
-        1: "ARCHANA KUMARI",
-        2: "DINESH KUMAR / INDAL KUMAR",
-        3: "SANDHYA KUMARI",
-        4: "SAURABH KUMAR",
-        5: "AYODHYA DUBEY / MD MAROOF",
-        6: "INDAL KUMAR",
-        7: "SNEHA SINGH",
-    },
-    "CLASS IX B": {
-        1: "KRISHNAMOHAN KAJI",
-        2: "SNEHA SINGH",
-        3: "NEERAJ KUMAR",
-        4: "DINESH KUMAR / PRASHANT KU OJHA",
-        5: "SADHNA KUMARI",
-        6: "AYODHYA DUBEY / MD MAROOF",
-        7: "SAURABH KUMAR",
     },
     "CLASS X A": {
         1: "AYODHYA DUBEY / MD MAROOF",
@@ -365,4 +352,3 @@ with tab2:
             file_name=os.path.basename(free_pdf_file),
             mime="application/pdf",
         )
-
