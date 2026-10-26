@@ -112,6 +112,10 @@ master_schedule = {
         6: "ARCHANA KUMARI",
         7: "SARWAT SIDDIQUI",
     },
+    "CLASS XII COMMERCE": {
+        1: "PINTU KUMAR",
+        3: "SAURABH KUMAR",
+    },
 }
 
 # Free matrix reference (DR MUKESH KU RAI excluded from substitute pool)
@@ -158,7 +162,7 @@ def generate_adjustments(absent_teachers):
         for cls, periods in master_schedule.items():
             assigned_teacher_str = str(periods.get(period, "")).upper()
 
-            if "PLAY ACTIVITY" in assigned_teacher_str:
+            if "PLAY ACTIVITY" in assigned_teacher_str or not assigned_teacher_str:
                 continue
 
             period_teachers = [t.strip() for t in assigned_teacher_str.split("/")]
@@ -352,3 +356,4 @@ with tab2:
             file_name=os.path.basename(free_pdf_file),
             mime="application/pdf",
         )
+
